@@ -30,10 +30,10 @@ def main():
     parser.add_argument("--ref", required=True)
     parser.add_argument("--expected", default="")
     parser.add_argument("--platform", choices=("android", "flatpak"), required=True)
-    parser.add_argument("--mode", choices=("test", "prepare", "draft"), default="test")
+    parser.add_argument("--mode", choices=("test", "candidate", "prepare", "draft"), default="test")
     parser.add_argument("--directory", type=Path, required=True)
     args = parser.parse_args()
-    ref, expected, version_from_tag = resolve(args.ref, args.expected, args.mode != "test")
+    ref, expected, version_from_tag = resolve(args.ref, args.expected, args.mode in ("prepare", "draft"))
     directory = args.directory.resolve()
     directory.mkdir()
     git(directory, "init", "--quiet")
@@ -52,7 +52,7 @@ def main():
     missing = [file for file in files if not (directory / file).is_file()]
     if missing:
         raise ValueError(f"{args.platform} sources are absent in upstream commit {commit}: {', '.join(missing)}")
-    if args.platform == "flatpak" and args.mode != "test" and not (directory / "packaging/flatpak/prepare-repository.py").is_file():
+    if args.platform == "flatpak" and args.mode in ("prepare", "draft") and not (directory / "packaging/flatpak/prepare-repository.py").is_file():
         raise ValueError("selected Flatpak source has no signed repository preparation helper")
     metadata = {"repo": "sqeezy-53/school-day", "ref": args.ref, "sha": commit,
                 "version": version, "platform": args.platform, "mode": args.mode}
