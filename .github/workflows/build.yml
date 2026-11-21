@@ -46,7 +46,8 @@ jobs:
         run: |
           if [[ "$MODE" != test ]]; then test "$GITHUB_REF" = "refs/heads/$DEFAULT_BRANCH"; fi
           python3 ci/source.py --platform android --ref "$SOURCE" --expected "$EXPECTED" \
-            --mode "$MODE" --directory source | tee BUILD.json
+            --mode "$MODE" --directory source > BUILD.json
+          cat BUILD.json
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with:
           distribution: temurin
@@ -84,7 +85,7 @@ jobs:
           apk="dist/school-day-$VERSION-debug.apk"
           cp source/android/app/build/outputs/apk/debug/app-debug.apk "$apk"
           python3 ci/verify-apk.py "$apk" --tools "$tools" --version "$VERSION" --signature debug
-          (cd dist && sha256sum *.apk BUILD.json > SHA256SUMS && sha256sum -c SHA256SUMS)
+          (cd dist && sha256sum -- *.apk BUILD.json > SHA256SUMS && sha256sum -c SHA256SUMS)
           if [[ "$MODE" != test ]]; then
             mkdir unsigned
             cp BUILD.json unsigned/
@@ -93,7 +94,7 @@ jobs:
             python3 ci/verify-apk.py "$apk" --tools "$tools" --version "$VERSION" --signature unsigned
             git -C source archive --format=tar.gz --prefix="school-day-$VERSION/" \
               --output="$GITHUB_WORKSPACE/unsigned/school-day-$VERSION-source.tar.gz" HEAD
-            (cd unsigned && sha256sum *.apk BUILD.json *.tar.gz > SHA256SUMS && sha256sum -c SHA256SUMS)
+            (cd unsigned && sha256sum -- *.apk BUILD.json *.tar.gz > SHA256SUMS && sha256sum -c SHA256SUMS)
           fi
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
