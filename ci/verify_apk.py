@@ -3,6 +3,7 @@
 import argparse
 from pathlib import Path
 import re
+from struct import Struct
 import subprocess
 from zipfile import ZipFile
 
@@ -17,6 +18,23 @@ def version_code(version):
     if minor >= 1000 or patch >= 1000 or not 0 < code <= 2_100_000_000:
         raise ValueError("Version cannot be represented without a versionCode collision")
     return str(code)
+
+def verify_library(binary, name):
+    header = Struct("<16sHHIQQQIHHHHHH")
+    segment = Struct("<IIQQQQQQ")
+    if len(binary) < header.size or not binary.startswith(b"\x7fELF\x02\x01"):
+        raise ValueError(f"Invalid 64-bit ELF library: {name}")
+    fields = header.unpack_from(binary)
+    offset, entry_size, count = fields[5], fields[9], fields[10]
+    if entry_size != segment.size or offset < header.size or offset + entry_size * count > len(binary):
+        raise ValueError(f"Invalid ELF program headers: {name}")
+    loads = [
+        row for i in range(count)
+        if (row := segment.unpack_from(binary, offset + i * entry_size))[0] == 1
+    ]
+    if not loads or any(row[7] < 16384 or (row[2] - row[3]) % 16384 for row in loads):
+        raise ValueError(f"ELF LOAD segments are not aligned for 16 KB pages: {name}")
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -33,10 +51,14 @@ def main():
     if ("application-debuggable" in identity.splitlines()) != (args.signature == "debug"):
         raise ValueError("Unexpected Android debuggable flag")
     with ZipFile(args.apk) as apk:
-        abis = {parts[1] for name in apk.namelist() if
-                len(parts := name.split("/")) == 3 and parts[0] == "lib" and parts[2].endswith(".so")}
-        if abis != ABIS or any(f"lib/{abi}/libschool_day_android.so" not in apk.namelist() for abi in ABIS):
+        libraries = [name for name in apk.namelist() if
+                     len(parts := name.split("/")) == 3 and parts[0] == "lib" and parts[2].endswith(".so")]
+        abis = {name.split("/")[1] for name in libraries}
+        if abis != ABIS or any(f"lib/{abi}/libschool_day_android.so" not in libraries for abi in ABIS):
             raise ValueError("APK does not contain the required JNI ABIs")
+        for library in libraries:
+            verify_library(apk.read(library), library)
+    subprocess.run([args.tools / "zipalign", "-c", "-P", "16", "4", args.apk], check=True)
     if args.signature != "unsigned":
         check = subprocess.check_output([args.tools / "apksigner", "verify", "--print-certs", args.apk], text=True)
         certs = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]{64})$", check, re.M)

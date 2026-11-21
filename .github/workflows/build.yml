@@ -84,14 +84,14 @@ jobs:
           cp BUILD.json dist/
           apk="dist/school-day-$VERSION-debug.apk"
           cp source/android/app/build/outputs/apk/debug/app-debug.apk "$apk"
-          python3 ci/verify-apk.py "$apk" --tools "$tools" --version "$VERSION" --signature debug
+          python3 ci/verify_apk.py "$apk" --tools "$tools" --version "$VERSION" --signature debug
           (cd dist && sha256sum -- *.apk BUILD.json > SHA256SUMS && sha256sum -c SHA256SUMS)
           if [[ "$MODE" != test ]]; then
             mkdir unsigned
             cp BUILD.json unsigned/
             apk="unsigned/school-day-$VERSION-unsigned.apk"
             cp source/android/app/build/outputs/apk/release/app-release-unsigned.apk "$apk"
-            python3 ci/verify-apk.py "$apk" --tools "$tools" --version "$VERSION" --signature unsigned
+            python3 ci/verify_apk.py "$apk" --tools "$tools" --version "$VERSION" --signature unsigned
             git -C source archive --format=tar.gz --prefix="school-day-$VERSION/" \
               --output="$GITHUB_WORKSPACE/unsigned/school-day-$VERSION-source.tar.gz" HEAD
             (cd unsigned && sha256sum -- *.apk BUILD.json *.tar.gz > SHA256SUMS && sha256sum -c SHA256SUMS)
